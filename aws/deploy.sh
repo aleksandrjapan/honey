@@ -16,7 +16,7 @@ fi
 STACK_NAME="honey-shop"
 ENVIRONMENT="production"
 REGION="eu-central-1"  # Можно изменить на нужный регион
-DOCDB_USERNAME="admin"
+DOCDB_USERNAME="honey"
 DOCDB_PASSWORD="$(openssl rand -base64 32)"  # Генерируем случайный пароль
 
 # Создание CloudFormation стека
