@@ -134,7 +134,7 @@ Resources:
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub ${Environment}-honey-cluster
+      ClusterName: !Sub honey-cluster
       CapacityProviders:
         - FARGATE
       DefaultCapacityProviderStrategy:
