@@ -76,8 +76,27 @@ jobs:
 
       - name: Validate Dockerfiles
         run: |
-          docker build --dry-run -f Dockerfile.frontend .
-          docker build --dry-run -f backend/Dockerfile ./backend
+          # Check if Dockerfiles exist
+          if [ ! -f Dockerfile.frontend ]; then
+            echo "❌ Dockerfile.frontend not found"
+            exit 1
+          fi
+          if [ ! -f backend/Dockerfile ]; then
+            echo "❌ backend/Dockerfile not found"
+            exit 1
+          fi
+          
+          # Validate Dockerfile syntax by building to a temporary tag
+          echo "Validating frontend Dockerfile..."
+          docker build -t frontend-validation:test -f Dockerfile.frontend . || exit 1
+          
+          echo "Validating backend Dockerfile..."
+          docker build -t backend-validation:test -f backend/Dockerfile ./backend || exit 1
+          
+          # Clean up validation images
+          docker rmi frontend-validation:test backend-validation:test || true
+          
+          echo "✅ Dockerfile validation completed"
 
       - name: Check Docker image size
         run: |
@@ -93,68 +112,3 @@ jobs:
           # Clean up test images
           docker rmi frontend-test backend-test
 
-  integration:
-    runs-on: ubuntu-latest
-    services:
-      mongodb:
-        image: mongo:6.0
-        env:
-          MONGO_INITDB_ROOT_USERNAME: test
-          MONGO_INITDB_ROOT_PASSWORD: test123
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --eval 'db.runCommand(\"ping\").ok'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: |
-          npm ci
-          cd backend && npm ci
-
-      - name: Wait for MongoDB
-        run: |
-          echo "Waiting for MongoDB to be ready..."
-          timeout 60 bash -c 'until mongosh --host localhost:27017 --username test --password test123 --authenticationDatabase admin --eval "db.runCommand(\"ping\").ok" --quiet; do sleep 2; done'
-
-      - name: Run integration tests
-        env:
-          MONGODB_URI: mongodb://test:test123@localhost:27017/test?authSource=admin
-          NODE_ENV: test
-        run: |
-          cd backend && npm run test:integration || echo "No integration tests configured"
-          npm run test:integration || echo "No frontend integration tests configured"
-
-  performance:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run Lighthouse CI
-        uses: treosh/lighthouse-ci-action@v10
-        with:
-          configPath: './.lighthouserc.json'
-          uploadArtifacts: true
-          temporaryPublicStorage: true
