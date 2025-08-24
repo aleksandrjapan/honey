@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   Box,
   Container,
@@ -15,7 +15,8 @@ import {
   Stack,
   useToast,
 } from '@chakra-ui/react';
-import api, { Order, PopulatedOrder } from '../services/api';
+import type { Order, PopulatedOrder } from '../services/api';
+import api from '../services/api';
 
 const statusColors: Record<Order['status'], string> = {
   pending: 'yellow',
@@ -35,15 +36,9 @@ const statusTranslations: Record<Order['status'], string> = {
 
 const Admin = () => {
   const [orders, setOrders] = useState<PopulatedOrder[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const toast = useToast();
 
-  useEffect(() => {
-    loadOrders();
-  }, []);
-
-  const loadOrders = async (): Promise<void> => {
-    setIsLoading(true);
+  const loadOrders = useCallback(async (): Promise<void> => {
     try {
       const response = await api.getAllOrders();
       setOrders(response.data);
@@ -56,10 +51,12 @@ const Admin = () => {
         duration: 3000,
         isClosable: true,
       });
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
 
   const updateOrderStatus = async (orderId: string, newStatus: Order['status']): Promise<void> => {
     try {
@@ -99,7 +96,7 @@ const Admin = () => {
   };
 
   return (
-    <Box py={8}>
+    <Box py={8} minWidth="100vw">
       <Container maxW="container.xl">
         <Stack spacing={8}>
           <Heading>Панель администратора</Heading>

@@ -15,7 +15,8 @@ import {
   useToast
 } from '@chakra-ui/react';
 import { useParams } from 'react-router-dom';
-import api, { Order, OrderItem } from '../services/api';
+import api from '../services/api';
+import type { Order, OrderItem } from '../services/api';
 
 interface OrderItemWithPopulatedProduct extends Omit<OrderItem, 'product'> {
   product: {
@@ -53,7 +54,7 @@ const OrderStatus = () => {
   const [error, setError] = useState('');
   const toast = useToast();
 
-  const handleSearch = async () => {
+  const searchOrder = async () => {
     if (!orderId.trim()) {
       toast({
         title: 'Введите номер заказа',
@@ -71,8 +72,10 @@ const OrderStatus = () => {
     try {
       const response = await api.getOrderById(orderId);
       setOrderDetails(response.data as PopulatedOrder);
-    } catch (err) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
       setError('Заказ не найден или произошла ошибка при поиске');
+      console.error('Error fetching order:', errorMessage);
       toast({
         title: 'Ошибка',
         description: 'Не удалось найти заказ',
@@ -96,7 +99,7 @@ const OrderStatus = () => {
   };
 
   return (
-    <Container maxW="container.md" py={10}>
+    <Container py={10} minWidth="100vw">
       <VStack spacing={8} align="stretch">
         <Heading textAlign="center">Проверка статуса заказа</Heading>
         
@@ -110,7 +113,7 @@ const OrderStatus = () => {
             <Button
               colorScheme="yellow"
               isLoading={isLoading}
-              onClick={handleSearch}
+              onClick={searchOrder}
               minW={{ base: 'full', md: '200px' }}
             >
               Проверить

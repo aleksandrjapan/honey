@@ -34,6 +34,8 @@ const Login = () => {
       });
       navigate('/admin');
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      console.error('Login error:', errorMessage);
       toast({
         title: 'Ошибка входа',
         description: 'Неверный email или пароль',

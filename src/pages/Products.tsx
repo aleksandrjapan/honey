@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   Box,
   Container,
@@ -11,20 +11,20 @@ import {
   useDisclosure,
   useToast
 } from '@chakra-ui/react';
-import api from '../services/api';
-import type { Product } from '../services/api';
+import api, { type Product } from '../services/api';
 import Cart from '../components/Cart';
+
+interface CartItem {
+  product: Pick<Product, '_id' | 'name' | 'price' | 'image' | 'description' | 'stock'>;
+  quantity: number;
+}
 
 const Products = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
 
-  useEffect(() => {
-    loadProducts();
-  }, []);
-
-  const loadProducts = async () => {
+  const loadProducts = useCallback(async () => {
     try {
       const response = await api.getProducts();
       setProducts(response.data);
@@ -38,12 +38,16 @@ const Products = () => {
         isClosable: true,
       });
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
 
   const addToCart = (product: Product) => {
     try {
-      const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
-      const existingItem = cartItems.find((item: any) => item.product._id === product._id);
+      const cartItems = JSON.parse(localStorage.getItem('cart') || '[]') as CartItem[];
+      const existingItem = cartItems.find(item => item.product._id === product._id);
 
       if (existingItem) {
         existingItem.quantity += 1;

@@ -1,4 +1,5 @@
-import axios, { AxiosResponse } from 'axios';
+import axios from 'axios';
+import type { AxiosResponse } from 'axios';
 
 const API_URL = 'http://localhost:5001/api';
 

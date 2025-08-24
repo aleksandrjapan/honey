@@ -29,7 +29,7 @@ interface CartProps {
   onClose: () => void;
 }
 
-const Cart = ({ isOpen, onClose }: CartProps): JSX.Element => {
+const Cart = ({ isOpen, onClose }: CartProps) => {
   const [items, setItems] = useState<CartItem[]>([]);
   const toast = useToast();
   const navigate = useNavigate();
