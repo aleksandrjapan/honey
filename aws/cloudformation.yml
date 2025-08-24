@@ -46,6 +46,26 @@ Resources:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-private-subnet-a
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-private-subnet-b
+
   # Одна публичная подсеть для ALB
   PublicSubnet:
     Type: AWS::EC2::Subnet
@@ -57,17 +77,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${Environment}-public-subnet
-
-  # Одна приватная подсеть для DocumentDB
-  PrivateSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
-      Tags:
-        - Key: Name
-          Value: !Sub ${Environment}-private-subnet
 
   # Route Table
   PublicRouteTable:
@@ -98,7 +107,8 @@ Resources:
     Properties:
       DBSubnetGroupDescription: Subnet group for DocumentDB cluster
       SubnetIds:
-        - !Ref PrivateSubnet
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
       Tags:
         - Key: Name
           Value: !Sub ${Environment}-docdb-subnet-group
