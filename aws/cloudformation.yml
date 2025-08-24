@@ -21,7 +21,7 @@ Parameters:
     NoEcho: true
 
 Resources:
-  # VPC and Network Configuration
+  # VPC Configuration
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -32,25 +32,76 @@ Resources:
         - Key: Name
           Value: !Sub ${Environment}-honey-vpc
 
-  PublicSubnet1:
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-honey-igw
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Одна публичная подсеть для ALB
+  PublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.1.0/24
       AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-public-subnet-1
+          Value: !Sub ${Environment}-public-subnet
 
-  PublicSubnet2:
+  # Одна приватная подсеть для DocumentDB
+  PrivateSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-public-subnet-2
+          Value: !Sub ${Environment}-private-subnet
+
+  # Route Table
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-public-rt
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # DocumentDB Subnet Group
+  DocDBSubnetGroup:
+    Type: AWS::DocDB::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for DocumentDB cluster
+      SubnetIds:
+        - !Ref PrivateSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-docdb-subnet-group
 
   # ECS Cluster
   ECSCluster:
@@ -108,8 +159,7 @@ Resources:
         - Key: idle_timeout.timeout_seconds
           Value: '60'
       Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
+        - !Ref PublicSubnet
       SecurityGroups:
         - !Ref ALBSecurityGroup
 
