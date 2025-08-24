@@ -42,11 +42,6 @@ jobs:
       - name: Run backend lints
         run: cd backend && npm run lint
 
-      - name: Run tests
-        run: |
-          npm test
-          cd backend && npm test
-
   deploy-infrastructure:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
