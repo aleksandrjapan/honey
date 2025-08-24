@@ -1,15 +1,15 @@
-import { useEffect, useState, useCallback } from 'react';
 import {
   Box,
+  Button,
   Container,
   Heading,
-  Text,
-  Stack,
-  Button,
-  useToast,
   Spinner,
+  Stack,
+  Text,
+  useToast,
 } from '@chakra-ui/react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
 
 const OrderConfirmation = () => {
@@ -55,7 +55,7 @@ const OrderConfirmation = () => {
   }
 
   return (
-    <Container maxW="container.xl" py={20}>
+    <Container minW="100vw" py={20}>
       <Stack spacing={8} align="center" textAlign="center">
         <Heading color="green.500">Заказ успешно оформлен!</Heading>
         

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
 const Product = require('../models/Product');
-const { adminAuth } = require('../middleware/auth');
+const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 // Получить заказ по ID (публичный доступ)
 router.get('/:id', async (req, res) => {
@@ -21,7 +21,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Получить все заказы (для админа)
-router.get('/admin/all', adminAuth, async (req, res) => {
+router.get('/admin/all', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const orders = await Order.find()
       .populate('items.product')
@@ -33,7 +33,7 @@ router.get('/admin/all', adminAuth, async (req, res) => {
 });
 
 // Обновить статус заказа (для админа)
-router.patch('/admin/:id/status', adminAuth, async (req, res) => {
+router.patch('/admin/:id/status', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { status } = req.body;
     const order = await Order.findById(req.params.id);

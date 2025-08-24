@@ -49,7 +49,7 @@ const products = [
 const seedDB = async () => {
   try {
     // Подключение к MongoDB
-    await mongoose.connect('mongodb://honey:password123@mongodb:27017/honey_shop?authSource=admin');
+    await mongoose.connect('mongodb://honey:password123@localhost:27017/honey_shop?authSource=admin');
     console.log('Connected to MongoDB');
 
     // Очистка существующих продуктов

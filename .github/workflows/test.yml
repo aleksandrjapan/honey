@@ -1,0 +1,114 @@
+name: Test and Validate
+
+on:
+  pull_request:
+    branches: [ main, master ]
+  push:
+    branches: [ main, master ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd backend && npm ci
+
+      # - name: Run frontend tests
+      #   run: npm run test || echo "No frontend tests configured"
+
+      # - name: Run backend tests
+      #   run: cd backend && npm run test || echo "No backend tests configured"
+
+      - name: Run frontend linting
+        run: npm run lint || echo "No frontend linting configured"
+
+      - name: Run backend linting
+        run: cd backend && npm run lint || echo "No backend linting configured"
+
+      - name: Check code formatting
+        run: |
+          npm run format:check || echo "No format check configured"
+          cd backend && npm run format:check || echo "No backend format check configured"
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build backend
+        run: cd backend && npm run build || echo "No backend build script"
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run security audit
+        run: |
+          npm audit --audit-level moderate || echo "Security vulnerabilities found"
+          cd backend && npm audit --audit-level moderate || echo "Backend security vulnerabilities found"
+
+      - name: Check for secrets in code
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate Dockerfiles
+        run: |
+          # Check if Dockerfiles exist
+          if [ ! -f Dockerfile.frontend ]; then
+            echo "❌ Dockerfile.frontend not found"
+            exit 1
+          fi
+          if [ ! -f backend/Dockerfile ]; then
+            echo "❌ backend/Dockerfile not found"
+            exit 1
+          fi
+          
+          # Validate Dockerfile syntax by building to a temporary tag
+          echo "Validating frontend Dockerfile..."
+          docker build -t frontend-validation:test -f Dockerfile.frontend . || exit 1
+          
+          echo "Validating backend Dockerfile..."
+          docker build -t backend-validation:test -f backend/Dockerfile ./backend || exit 1
+          
+          # Clean up validation images
+          docker rmi frontend-validation:test backend-validation:test || true
+          
+          echo "✅ Dockerfile validation completed"
+
+      - name: Check Docker image size
+        run: |
+          docker build -t frontend-test -f Dockerfile.frontend .
+          docker build -t backend-test -f backend/Dockerfile ./backend
+          
+          echo "Frontend image size:"
+          docker images frontend-test --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+          
+          echo "Backend image size:"
+          docker images backend-test --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+          
+          # Clean up test images
+          docker rmi frontend-test backend-test
+

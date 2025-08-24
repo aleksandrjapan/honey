@@ -1,20 +1,26 @@
-import { useEffect, useState, useCallback } from 'react';
 import {
-  Box,
-  Container,
-  Heading,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  Badge,
-  Select,
-  Text,
-  Stack,
-  useToast,
+    Badge,
+    Box,
+    Container,
+    Heading,
+    Select,
+    Stack,
+    Tab,
+    Table,
+    TabList,
+    TabPanel,
+    TabPanels,
+    Tabs,
+    Tbody,
+    Td,
+    Text,
+    Th,
+    Thead,
+    Tr,
+    useToast,
 } from '@chakra-ui/react';
+import { useCallback, useEffect, useState } from 'react';
+import CreateAdmin from '../components/CreateAdmin';
 import type { Order, PopulatedOrder } from '../services/api';
 import api from '../services/api';
 
@@ -101,62 +107,77 @@ const Admin = () => {
         <Stack spacing={8}>
           <Heading>Панель администратора</Heading>
           
-          <Box overflowX="auto">
-            <Table variant="simple">
-              <Thead>
-                <Tr>
-                  <Th>Дата</Th>
-                  <Th>Клиент</Th>
-                  <Th>Товары</Th>
-                  <Th isNumeric>Сумма</Th>
-                  <Th>Статус</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {orders.map((order) => (
-                  <Tr key={order._id}>
-                    <Td>{formatDate(order.createdAt)}</Td>
-                    <Td>
-                      <Stack spacing={1}>
-                        <Text fontWeight="bold">{order.customer.name}</Text>
-                        <Text fontSize="sm">{order.customer.email}</Text>
-                        <Text fontSize="sm">{order.customer.phone}</Text>
-                        <Text fontSize="sm">{order.customer.address}</Text>
-                      </Stack>
-                    </Td>
-                    <Td>
-                      <Stack spacing={2}>
-                        {order.items.map((item, index) => (
-                          <Text key={index}>
-                            {typeof item.product === 'object' ? item.product.name : item.product} × {item.quantity}
-                          </Text>
-                        ))}
-                      </Stack>
-                    </Td>
-                    <Td isNumeric>{calculateTotalAmount(order)} ₽</Td>
-                    <Td>
-                      <Stack spacing={2}>
-                        <Select
-                          value={order.status}
-                          onChange={(e) => updateOrderStatus(order._id, e.target.value as Order['status'])}
-                          width="150px"
-                        >
-                          {Object.entries(statusTranslations).map(([value, label]) => (
-                            <option key={value} value={value}>
-                              {label}
-                            </option>
-                          ))}
-                        </Select>
-                        <Badge colorScheme={statusColors[order.status]}>
-                          {statusTranslations[order.status]}
-                        </Badge>
-                      </Stack>
-                    </Td>
-                  </Tr>
-                ))}
-              </Tbody>
-            </Table>
-          </Box>
+          <Tabs variant="enclosed">
+            <TabList>
+              <Tab>Управление заказами</Tab>
+              <Tab>Создание администраторов</Tab>
+            </TabList>
+            
+            <TabPanels>
+              <TabPanel>
+                <Box overflowX="auto">
+                  <Table variant="simple">
+                    <Thead>
+                      <Tr>
+                        <Th>Дата</Th>
+                        <Th>Клиент</Th>
+                        <Th>Товары</Th>
+                        <Th isNumeric>Сумма</Th>
+                        <Th>Статус</Th>
+                      </Tr>
+                    </Thead>
+                    <Tbody>
+                      {orders.map((order) => (
+                        <Tr key={order._id}>
+                          <Td>{formatDate(order.createdAt)}</Td>
+                          <Td>
+                            <Stack spacing={1}>
+                              <Text fontWeight="bold">{order.customer.name}</Text>
+                              <Text fontSize="sm">{order.customer.email}</Text>
+                              <Text fontSize="sm">{order.customer.phone}</Text>
+                              <Text fontSize="sm">{order.customer.address}</Text>
+                            </Stack>
+                          </Td>
+                          <Td>
+                            <Stack spacing={2}>
+                              {order.items.map((item, index) => (
+                                <Text key={index}>
+                                  {typeof item.product === 'object' ? item.product.name : item.product} × {item.quantity}
+                                </Text>
+                              ))}
+                            </Stack>
+                          </Td>
+                          <Td isNumeric>{calculateTotalAmount(order)} ₽</Td>
+                          <Td>
+                            <Stack spacing={2}>
+                              <Select
+                                value={order.status}
+                                onChange={(e) => updateOrderStatus(order._id, e.target.value as Order['status'])}
+                                width="150px"
+                              >
+                                {Object.entries(statusTranslations).map(([value, label]) => (
+                                  <option key={value} value={value}>
+                                    {label}
+                                  </option>
+                                ))}
+                              </Select>
+                              <Badge colorScheme={statusColors[order.status]}>
+                                {statusTranslations[order.status]}
+                              </Badge>
+                            </Stack>
+                          </Td>
+                        </Tr>
+                      ))}
+                    </Tbody>
+                  </Table>
+                </Box>
+              </TabPanel>
+              
+              <TabPanel>
+                <CreateAdmin />
+              </TabPanel>
+            </TabPanels>
+          </Tabs>
         </Stack>
       </Container>
     </Box>

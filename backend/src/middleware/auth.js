@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
-const auth = (req, res, next) => {
+const authenticateToken = (req, res, next) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
     
@@ -18,13 +18,11 @@ const auth = (req, res, next) => {
   }
 };
 
-const adminAuth = (req, res, next) => {
-  auth(req, res, () => {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Доступ запрещен' });
-    }
-    next();
-  });
+const requireAdmin = (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Доступ запрещен' });
+  }
+  next();
 };
 
-module.exports = { auth, adminAuth, JWT_SECRET };
+module.exports = { authenticateToken, requireAdmin, JWT_SECRET };
