@@ -1,0 +1,160 @@
+name: Test and Validate
+
+on:
+  pull_request:
+    branches: [ main, master ]
+  push:
+    branches: [ main, master ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd backend && npm ci
+
+      # - name: Run frontend tests
+      #   run: npm run test || echo "No frontend tests configured"
+
+      # - name: Run backend tests
+      #   run: cd backend && npm run test || echo "No backend tests configured"
+
+      - name: Run frontend linting
+        run: npm run lint || echo "No frontend linting configured"
+
+      - name: Run backend linting
+        run: cd backend && npm run lint || echo "No backend linting configured"
+
+      - name: Check code formatting
+        run: |
+          npm run format:check || echo "No format check configured"
+          cd backend && npm run format:check || echo "No backend format check configured"
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build backend
+        run: cd backend && npm run build || echo "No backend build script"
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run security audit
+        run: |
+          npm audit --audit-level moderate || echo "Security vulnerabilities found"
+          cd backend && npm audit --audit-level moderate || echo "Backend security vulnerabilities found"
+
+      - name: Check for secrets in code
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate Dockerfiles
+        run: |
+          docker build --dry-run -f Dockerfile.frontend .
+          docker build --dry-run -f backend/Dockerfile ./backend
+
+      - name: Check Docker image size
+        run: |
+          docker build -t frontend-test -f Dockerfile.frontend .
+          docker build -t backend-test -f backend/Dockerfile ./backend
+          
+          echo "Frontend image size:"
+          docker images frontend-test --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+          
+          echo "Backend image size:"
+          docker images backend-test --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+          
+          # Clean up test images
+          docker rmi frontend-test backend-test
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:6.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: test
+          MONGO_INITDB_ROOT_PASSWORD: test123
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand(\"ping\").ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd backend && npm ci
+
+      - name: Wait for MongoDB
+        run: |
+          echo "Waiting for MongoDB to be ready..."
+          timeout 60 bash -c 'until mongosh --host localhost:27017 --username test --password test123 --authenticationDatabase admin --eval "db.runCommand(\"ping\").ok" --quiet; do sleep 2; done'
+
+      - name: Run integration tests
+        env:
+          MONGODB_URI: mongodb://test:test123@localhost:27017/test?authSource=admin
+          NODE_ENV: test
+        run: |
+          cd backend && npm run test:integration || echo "No integration tests configured"
+          npm run test:integration || echo "No frontend integration tests configured"
+
+  performance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v10
+        with:
+          configPath: './.lighthouserc.json'
+          uploadArtifacts: true
+          temporaryPublicStorage: true

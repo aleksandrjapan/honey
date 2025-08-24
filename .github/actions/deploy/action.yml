@@ -1,0 +1,90 @@
+name: 'Deploy to DigitalOcean'
+description: 'Deploy application to DigitalOcean droplet'
+inputs:
+  droplet_ip:
+    description: 'DigitalOcean droplet IP address'
+    required: true
+  username:
+    description: 'SSH username'
+    required: true
+    default: 'root'
+  ssh_key:
+    description: 'SSH private key'
+    required: true
+  environment:
+    description: 'Environment name (staging/production)'
+    required: true
+    default: 'staging'
+  frontend_image:
+    description: 'Frontend Docker image'
+    required: true
+  backend_image:
+    description: 'Backend Docker image'
+    required: true
+  health_check_url:
+    description: 'Health check URL'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Deploy to DigitalOcean
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ inputs.droplet_ip }}
+        username: ${{ inputs.username }}
+        key: ${{ inputs.ssh_key }}
+        script: |
+          cd /opt/honey-shop
+          export FRONTEND_IMAGE="${{ inputs.frontend_image }}"
+          export BACKEND_IMAGE="${{ inputs.backend_image }}"
+          export ENVIRONMENT="${{ inputs.environment }}"
+          
+          echo "Deploying to $ENVIRONMENT environment..."
+          echo "Frontend: $FRONTEND_IMAGE"
+          echo "Backend: $BACKEND_IMAGE"
+          
+          # Pull new images
+          docker pull $FRONTEND_IMAGE
+          docker pull $BACKEND_IMAGE
+          
+          # Update docker-compose.yml with new images
+          sed -i "s|image:.*frontend.*|image: $FRONTEND_IMAGE|g" docker-compose.yml
+          sed -i "s|image:.*backend.*|image: $BACKEND_IMAGE|g" docker-compose.yml
+          
+          # Restart services
+          docker-compose down
+          docker-compose up -d
+          
+          # Wait for services to be ready
+          echo "Waiting for services to start..."
+          sleep 30
+          
+          # Check status
+          docker-compose ps
+          
+          # Health check
+          if [ -n "${{ inputs.health_check_url }}" ]; then
+            echo "Performing health check..."
+            curl -f "${{ inputs.health_check_url }}" || echo "Health check failed"
+          fi
+          
+          echo "Deployment to $ENVIRONMENT completed!"
+
+    - name: Wait for deployment
+      shell: bash
+      run: |
+        echo "Waiting for deployment to stabilize..."
+        sleep 60
+
+    - name: Verify deployment
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.health_check_url }}" ]; then
+          echo "Verifying deployment..."
+          curl -f "${{ inputs.health_check_url }}" || exit 1
+          echo "✅ Deployment verified successfully!"
+        else
+          echo "No health check URL provided, skipping verification"
+        fi
