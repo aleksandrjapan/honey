@@ -14,9 +14,22 @@ import {
   Badge,
   useToast
 } from '@chakra-ui/react';
-import api from '../services/api';
+import { useParams } from 'react-router-dom';
+import api, { Order, OrderItem } from '../services/api';
 
-const statusColors = {
+interface OrderItemWithPopulatedProduct extends Omit<OrderItem, 'product'> {
+  product: {
+    _id: string;
+    name: string;
+    price: number;
+  };
+}
+
+interface PopulatedOrder extends Omit<Order, 'items'> {
+  items: OrderItemWithPopulatedProduct[];
+}
+
+const statusColors: Record<Order['status'], string> = {
   pending: 'yellow',
   processing: 'blue',
   shipped: 'purple',
@@ -24,7 +37,7 @@ const statusColors = {
   cancelled: 'red',
 };
 
-const statusTranslations = {
+const statusTranslations: Record<Order['status'], string> = {
   pending: 'Ожидает обработки',
   processing: 'В обработке',
   shipped: 'Отправлен',
@@ -33,8 +46,9 @@ const statusTranslations = {
 };
 
 const OrderStatus = () => {
-  const [orderId, setOrderId] = useState('');
-  const [orderDetails, setOrderDetails] = useState<any>(null);
+  const { orderId: urlOrderId } = useParams<{ orderId?: string }>();
+  const [orderId, setOrderId] = useState(urlOrderId || '');
+  const [orderDetails, setOrderDetails] = useState<PopulatedOrder | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const toast = useToast();
@@ -56,7 +70,7 @@ const OrderStatus = () => {
 
     try {
       const response = await api.getOrderById(orderId);
-      setOrderDetails(response.data);
+      setOrderDetails(response.data as PopulatedOrder);
     } catch (err) {
       setError('Заказ не найден или произошла ошибка при поиске');
       toast({
@@ -71,7 +85,7 @@ const OrderStatus = () => {
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string): string => {
     return new Date(dateString).toLocaleString('ru-RU', {
       day: '2-digit',
       month: '2-digit',
@@ -119,12 +133,12 @@ const OrderStatus = () => {
                   Заказ #{orderDetails._id}
                 </Text>
                 <Badge
-                  colorScheme={statusColors[orderDetails.status as keyof typeof statusColors]}
+                  colorScheme={statusColors[orderDetails.status]}
                   fontSize="md"
                   p={2}
                   borderRadius="md"
                 >
-                  {statusTranslations[orderDetails.status as keyof typeof statusTranslations]}
+                  {statusTranslations[orderDetails.status]}
                 </Badge>
               </Stack>
 
@@ -139,7 +153,7 @@ const OrderStatus = () => {
               <Box>
                 <Text fontWeight="bold" mb={2}>Товары:</Text>
                 <VStack spacing={2} align="stretch">
-                  {orderDetails.items.map((item: any, index: number) => (
+                  {orderDetails.items.map((item, index) => (
                     <Box key={index} p={2} bg="gray.50" borderRadius="md">
                       <Text>{item.product.name} × {item.quantity} шт.</Text>
                       <Text fontSize="sm" color="gray.600">
@@ -155,6 +169,7 @@ const OrderStatus = () => {
                 <Text>Получатель: {orderDetails.customer.name}</Text>
                 <Text>Адрес: {orderDetails.customer.address}</Text>
                 <Text>Телефон: {orderDetails.customer.phone}</Text>
+                <Text>Email: {orderDetails.customer.email}</Text>
               </Box>
             </VStack>
           </Box>

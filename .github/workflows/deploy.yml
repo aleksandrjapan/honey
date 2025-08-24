@@ -115,27 +115,3 @@ jobs:
         run: |
           aws ecs wait services-stable --cluster $ECS_CLUSTER --services $ECS_SERVICE_FRONTEND
           aws ecs wait services-stable --cluster $ECS_CLUSTER --services $ECS_SERVICE_BACKEND
-
-  notify:
-    needs: [build-and-deploy]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deployment status to Slack
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          payload: |
-            {
-              "text": "${{ job.status == 'success' && '✅ Deployment successful!' || '❌ Deployment failed!' }}\nEnvironment: Production\nBranch: ${{ github.ref_name }}\nCommit: ${{ github.sha }}\nAuthor: ${{ github.actor }}"
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-      - name: Create GitHub Deployment
-        if: success()
-        uses: chrnorm/deployment-action@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          environment: production
-          initial-status: success
-          description: 'Deployed version ${{ github.sha }}'

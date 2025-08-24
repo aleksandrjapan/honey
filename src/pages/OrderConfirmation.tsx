@@ -27,7 +27,7 @@ const OrderConfirmation = () => {
       } catch (error) {
         toast({
           title: 'Ошибка',
-          description: 'Не удалось загрузить статус заказа',
+          description: `Не удалось загрузить статус заказа ${error}`,
           status: 'error',
           duration: 3000,
           isClosable: true,

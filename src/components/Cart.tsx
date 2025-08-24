@@ -15,12 +15,12 @@ import {
   IconButton,
   useToast
 } from '@chakra-ui/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Product } from '../services/api';
 
 interface CartItem {
-  product: Product;
+  product: Pick<Product, '_id' | 'name' | 'price' | 'image'>;
   quantity: number;
 }
 
@@ -29,12 +29,12 @@ interface CartProps {
   onClose: () => void;
 }
 
-const Cart = ({ isOpen, onClose }: CartProps) => {
+const Cart = ({ isOpen, onClose }: CartProps): JSX.Element => {
   const [items, setItems] = useState<CartItem[]>([]);
   const toast = useToast();
   const navigate = useNavigate();
 
-  const loadCartItems = () => {
+  const loadCartItems = useCallback((): void => {
     try {
       const savedCart = localStorage.getItem('cart');
       if (savedCart) {
@@ -50,12 +50,12 @@ const Cart = ({ isOpen, onClose }: CartProps) => {
         isClosable: true,
       });
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     loadCartItems();
     
-    const handleStorageChange = () => {
+    const handleStorageChange = (): void => {
       loadCartItems();
     };
     
@@ -63,9 +63,9 @@ const Cart = ({ isOpen, onClose }: CartProps) => {
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, []);
+  }, [loadCartItems]);
 
-  const updateQuantity = (productId: string, change: number) => {
+  const updateQuantity = (productId: string, change: number): void => {
     try {
       const updatedItems = items.map(item => {
         if (item.product._id === productId) {
@@ -74,7 +74,7 @@ const Cart = ({ isOpen, onClose }: CartProps) => {
           return { ...item, quantity: newQuantity };
         }
         return item;
-      }).filter(Boolean) as CartItem[];
+      }).filter((item): item is CartItem => item !== null);
 
       setItems(updatedItems);
       localStorage.setItem('cart', JSON.stringify(updatedItems));
@@ -92,13 +92,13 @@ const Cart = ({ isOpen, onClose }: CartProps) => {
     }
   };
 
-  const getTotalAmount = () => {
+  const getTotalAmount = (): number => {
     return items.reduce((total, item) => total + item.product.price * item.quantity, 0);
   };
 
-  const handleCheckout = () => {
-    onClose(); // Закрываем корзину
-    navigate('/checkout'); // Переходим на страницу оформления заказа
+  const handleCheckout = (): void => {
+    onClose();
+    navigate('/checkout');
   };
 
   return (
