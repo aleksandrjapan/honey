@@ -2,12 +2,18 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { JWT_SECRET } = require('../middleware/auth');
+const { JWT_SECRET, authenticateToken, requireAdmin } = require('../middleware/auth');
 
-// Регистрация (только для разработки)
+// Регистрация (только для первого администратора)
 router.post('/register', async (req, res) => {
   try {
     const { email, password } = req.body;
+    
+    // Проверяем, есть ли уже администраторы в системе
+    const existingAdmin = await User.findOne({ role: 'admin' });
+    if (existingAdmin) {
+      return res.status(403).json({ message: 'Регистрация новых пользователей отключена. Используйте панель администратора для создания новых администраторов.' });
+    }
     
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -28,7 +34,10 @@ router.post('/register', async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    res.status(201).json({ token });
+    res.status(201).json({ 
+      message: 'Первый администратор успешно создан',
+      token 
+    });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -56,6 +65,54 @@ router.post('/login', async (req, res) => {
     );
 
     res.json({ token });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Создание нового администратора (требует права администратора)
+router.post('/create-admin', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    // Проверка обязательных полей
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email и пароль обязательны' });
+    }
+
+    // Проверка формата email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Неверный формат email' });
+    }
+
+    // Проверка длины пароля
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Пароль должен содержать минимум 6 символов' });
+    }
+    
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Пользователь с таким email уже существует' });
+    }
+
+    const user = new User({
+      email,
+      password,
+      role: 'admin'
+    });
+
+    await user.save();
+    
+    res.status(201).json({ 
+      message: 'Администратор успешно создан',
+      user: {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        createdAt: user.createdAt
+      }
+    });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }

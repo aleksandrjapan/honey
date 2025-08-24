@@ -1,5 +1,5 @@
-import axios from 'axios';
 import type { AxiosResponse } from 'axios';
+import axios from 'axios';
 
 const API_URL = 'http://localhost:5001/api';
 
@@ -66,6 +66,21 @@ export interface CreateOrderData {
   totalAmount: number;
 }
 
+export interface CreateAdminData {
+  email: string;
+  password: string;
+}
+
+export interface CreateAdminResponse {
+  message: string;
+  user: {
+    id: string;
+    email: string;
+    role: string;
+    createdAt: string;
+  };
+}
+
 export interface LoginResponse {
   token: string;
 }
@@ -78,6 +93,9 @@ const api = {
   // Аутентификация
   login: (email: string, password: string): Promise<AxiosResponse<LoginResponse>> => 
     axiosInstance.post('/auth/login', { email, password }),
+
+  createAdmin: (data: CreateAdminData): Promise<AxiosResponse<CreateAdminResponse>> => 
+    axiosInstance.post('/auth/create-admin', data),
 
   // Продукты
   getProducts: (): Promise<AxiosResponse<Product[]>> => 

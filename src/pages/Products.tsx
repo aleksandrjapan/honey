@@ -1,18 +1,18 @@
-import { useEffect, useState, useCallback } from 'react';
 import {
   Box,
+  Button,
   Container,
   Heading,
-  SimpleGrid,
   Image,
-  Text,
+  SimpleGrid,
   Stack,
-  Button,
+  Text,
   useDisclosure,
   useToast
 } from '@chakra-ui/react';
-import api, { type Product } from '../services/api';
+import { useCallback, useEffect, useState } from 'react';
 import Cart from '../components/Cart';
+import api, { type Product } from '../services/api';
 
 interface CartItem {
   product: Pick<Product, '_id' | 'name' | 'price' | 'image' | 'description' | 'stock'>;
@@ -89,8 +89,8 @@ const Products = () => {
   };
 
   return (
-    <Box py={10} maxW="100vw">
-      <Container maxW="100%" p={0}>
+    <Box py={10} minW="100vw">
+      <Container maxW="100%" px={250}>
         <Heading as="h1" size="2xl" color="brown.800" mb={10} textAlign="center">
           Наша продукция
         </Heading>
