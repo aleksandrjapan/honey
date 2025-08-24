@@ -16,7 +16,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-      - MONGODB_URI=mongodb://admin:password123@mongodb:27017/honey_shop?authSource=admin
+      - MONGODB_URI=mongodb://honey:password123@mongodb:27017/honey_shop?authSource=admin
       - PORT=5001
     ports:
       - "5001:5001"
@@ -34,7 +34,7 @@ services:
     volumes:
       - mongodb_data:/data/db
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_USERNAME=honey
       - MONGO_INITDB_ROOT_PASSWORD=password123
     networks:
       - honey_network
@@ -46,7 +46,7 @@ services:
     ports:
       - "8081:8081"
     environment:
-      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=honey
       - ME_CONFIG_MONGODB_ADMINPASSWORD=password123
       - ME_CONFIG_MONGODB_SERVER=mongodb
     depends_on:
