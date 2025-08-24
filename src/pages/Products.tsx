@@ -89,7 +89,7 @@ const Products = () => {
   };
 
   return (
-    <Box py={10} px={{ base: 4, md: 8, lg: 16 }} maxW="100vw">
+    <Box py={10} maxW="100vw">
       <Container maxW="100%" p={0}>
         <Heading as="h1" size="2xl" color="brown.800" mb={10} textAlign="center">
           Наша продукция
