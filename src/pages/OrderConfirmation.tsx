@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   Box,
   Container,
@@ -13,32 +13,35 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
 const OrderConfirmation = () => {
-  const { orderId } = useParams();
+  const { orderId } = useParams<{ orderId: string }>();
   const [orderStatus, setOrderStatus] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const toast = useToast();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const loadOrderStatus = async () => {
-      try {
-        const response = await api.getOrderStatus(orderId!);
-        setOrderStatus(response.data.status);
-      } catch (error) {
-        toast({
-          title: 'Ошибка',
-          description: 'Не удалось загрузить статус заказа',
-          status: 'error',
-          duration: 3000,
-          isClosable: true,
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const loadOrderStatus = useCallback(async () => {
+    try {
+      if (!orderId) return;
+      const response = await api.getOrderStatus(orderId);
+      setOrderStatus(response.data.status);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';
+      console.error('Error loading order status:', errorMessage);
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось загрузить статус заказа',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [orderId, toast]);
 
+  useEffect(() => {
     loadOrderStatus();
-  }, [orderId]);
+  }, [loadOrderStatus]);
 
   if (isLoading) {
     return (
@@ -52,7 +55,7 @@ const OrderConfirmation = () => {
   }
 
   return (
-    <Container maxW="container.xl" py={20} minWidth="100vw">
+    <Container maxW="container.xl" py={20}>
       <Stack spacing={8} align="center" textAlign="center">
         <Heading color="green.500">Заказ успешно оформлен!</Heading>
         

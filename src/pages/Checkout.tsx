@@ -3,7 +3,6 @@ import {
   Box,
   Container,
   Heading,
-  Stack,
   FormControl,
   FormLabel,
   Input,
@@ -13,9 +12,11 @@ import {
   Image,
   useToast,
   Divider,
+  Stack,
+  VStack,
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import api, { type CreateOrderData } from '../services/api';
 
 interface CartItem {
   product: {
@@ -59,7 +60,7 @@ const Checkout = () => {
 
     try {
       // Формируем данные заказа
-      const orderData = {
+      const orderData: CreateOrderData = {
         customer: formData,
         items: cartItems.map(item => ({
           product: item.product._id,
@@ -87,6 +88,8 @@ const Checkout = () => {
       // Перенаправляем на страницу подтверждения
       navigate(`/order-confirmation/${response.data._id}`);
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      console.error('Error creating order:', errorMessage);
       toast({
         title: 'Ошибка',
         description: 'Не удалось оформить заказ',
@@ -113,11 +116,11 @@ const Checkout = () => {
   }
 
   return (
-    <Container maxW="container.xl" py={20} minWidth="100vw">
+    <Container maxW="container.xl" py={20}>
       <Grid templateColumns={{ base: '1fr', lg: '1fr 1fr' }} gap={10}>
         <Box>
           <Heading size="lg" mb={6}>Оформление заказа</Heading>
-          <Stack as="form" onSubmit={handleSubmit} spacing={4}>
+          <VStack as="form" onSubmit={handleSubmit} spacing={4}>
             <FormControl isRequired>
               <FormLabel>Имя</FormLabel>
               <Input
@@ -165,11 +168,12 @@ const Checkout = () => {
               colorScheme="yellow"
               size="lg"
               isLoading={isLoading}
+              width="100%"
               mt={4}
             >
               Оформить заказ
             </Button>
-          </Stack>
+          </VStack>
         </Box>
 
         <Box>

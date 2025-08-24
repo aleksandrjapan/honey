@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   Box,
   Container,
@@ -15,10 +15,10 @@ import {
   Stack,
   useToast,
 } from '@chakra-ui/react';
-import type { Order } from '../services/api';
+import type { Order, PopulatedOrder } from '../services/api';
 import api from '../services/api';
 
-const statusColors: Record<string, string> = {
+const statusColors: Record<Order['status'], string> = {
   pending: 'yellow',
   processing: 'blue',
   shipped: 'purple',
@@ -26,15 +26,19 @@ const statusColors: Record<string, string> = {
   cancelled: 'red',
 };
 
+const statusTranslations: Record<Order['status'], string> = {
+  pending: 'Ожидает обработки',
+  processing: 'В обработке',
+  shipped: 'Отправлен',
+  delivered: 'Доставлен',
+  cancelled: 'Отменён',
+};
+
 const Admin = () => {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<PopulatedOrder[]>([]);
   const toast = useToast();
 
-  useEffect(() => {
-    loadOrders();
-  }, []);
-
-  const loadOrders = async () => {
+  const loadOrders = useCallback(async (): Promise<void> => {
     try {
       const response = await api.getAllOrders();
       setOrders(response.data);
@@ -48,12 +52,16 @@ const Admin = () => {
         isClosable: true,
       });
     }
-  };
+  }, [toast]);
 
-  const updateOrderStatus = async (orderId: string, newStatus: string) => {
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
+
+  const updateOrderStatus = async (orderId: string, newStatus: Order['status']): Promise<void> => {
     try {
       await api.updateOrderStatus(orderId, newStatus);
-      loadOrders();
+      await loadOrders();
       toast({
         title: 'Статус обновлен',
         description: 'Статус заказа успешно обновлен',
@@ -73,8 +81,22 @@ const Admin = () => {
     }
   };
 
+  const formatDate = (dateString: string): string => {
+    return new Date(dateString).toLocaleString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const calculateTotalAmount = (order: PopulatedOrder): number => {
+    return order.items.reduce((total, item) => total + item.price * item.quantity, 0);
+  };
+
   return (
-    <Box py={8}>
+    <Box py={8} minWidth="100vw">
       <Container maxW="container.xl">
         <Stack spacing={8}>
           <Heading>Панель администратора</Heading>
@@ -86,22 +108,14 @@ const Admin = () => {
                   <Th>Дата</Th>
                   <Th>Клиент</Th>
                   <Th>Товары</Th>
-                  <Th>Сумма</Th>
+                  <Th isNumeric>Сумма</Th>
                   <Th>Статус</Th>
                 </Tr>
               </Thead>
               <Tbody>
                 {orders.map((order) => (
                   <Tr key={order._id}>
-                    <Td>
-                      {new Date(order.createdAt).toLocaleDateString('ru-RU', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </Td>
+                    <Td>{formatDate(order.createdAt)}</Td>
                     <Td>
                       <Stack spacing={1}>
                         <Text fontWeight="bold">{order.customer.name}</Text>
@@ -114,30 +128,29 @@ const Admin = () => {
                       <Stack spacing={2}>
                         {order.items.map((item, index) => (
                           <Text key={index}>
-                            {item.product} x {item.quantity}
+                            {typeof item.product === 'object' ? item.product.name : item.product} × {item.quantity}
                           </Text>
                         ))}
                       </Stack>
                     </Td>
-                    <Td isNumeric>{order.totalAmount} ₽</Td>
+                    <Td isNumeric>{calculateTotalAmount(order)} ₽</Td>
                     <Td>
-                      <Select
-                        value={order.status}
-                        onChange={(e) => updateOrderStatus(order._id, e.target.value)}
-                        width="150px"
-                      >
-                        <option value="pending">Ожидает</option>
-                        <option value="processing">Обработка</option>
-                        <option value="shipped">Отправлен</option>
-                        <option value="delivered">Доставлен</option>
-                        <option value="cancelled">Отменён</option>
-                      </Select>
-                      <Badge
-                        colorScheme={statusColors[order.status]}
-                        mt={2}
-                      >
-                        {order.status}
-                      </Badge>
+                      <Stack spacing={2}>
+                        <Select
+                          value={order.status}
+                          onChange={(e) => updateOrderStatus(order._id, e.target.value as Order['status'])}
+                          width="150px"
+                        >
+                          {Object.entries(statusTranslations).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </Select>
+                        <Badge colorScheme={statusColors[order.status]}>
+                          {statusTranslations[order.status]}
+                        </Badge>
+                      </Stack>
                     </Td>
                   </Tr>
                 ))}
