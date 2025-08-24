@@ -9,6 +9,7 @@ import Contact from './pages/Contact'
 import Admin from './pages/Admin'
 import Login from './pages/Login'
 import Checkout from './pages/Checkout'
+import OrderStatus from './pages/OrderStatus'
 import OrderConfirmation from './pages/OrderConfirmation'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -16,9 +17,9 @@ function App() {
   return (
     <ChakraProvider>
       <Router>
-        <Box minH="100vh" display="flex" flexDirection="column" maxW="100vw" overflow="hidden">
+        <Box minH="100vh" display="flex" flexDirection="column">
           <Header />
-          <Box flex="1" w="full">
+          <Box flex="1">
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/products" element={<Products />} />
@@ -26,6 +27,8 @@ function App() {
               <Route path="/contact" element={<Contact />} />
               <Route path="/login" element={<Login />} />
               <Route path="/checkout" element={<Checkout />} />
+              <Route path="/order-status" element={<OrderStatus />} />
+              <Route path="/order-status/:orderId" element={<OrderStatus />} />
               <Route path="/order-confirmation/:orderId" element={<OrderConfirmation />} />
               <Route 
                 path="/admin" 

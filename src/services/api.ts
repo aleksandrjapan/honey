@@ -2,12 +2,10 @@ import axios from 'axios';
 
 const API_URL = 'http://localhost:5001/api';
 
-// Создаем инстанс axios с базовым URL
 const axiosInstance = axios.create({
   baseURL: API_URL
 });
 
-// Добавляем перехватчик для добавления токена к запросам
 axiosInstance.interceptors.request.use((config) => {
   const token = localStorage.getItem('adminToken');
   if (token) {
@@ -26,7 +24,7 @@ export interface Product {
 }
 
 export interface OrderItem {
-  product: string;
+  product: string | Product;
   quantity: number;
   price: number;
 }
@@ -43,7 +41,7 @@ export interface Order {
   customer: Customer;
   items: OrderItem[];
   totalAmount: number;
-  status: string;
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   createdAt: string;
 }
 
@@ -64,6 +62,7 @@ const api = {
 
   // Заказы
   createOrder: (order: CreateOrderData) => axiosInstance.post<Order>('/orders', order),
+  getOrderById: (id: string) => axiosInstance.get<Order>(`/orders/${id}`),
   getUserOrders: (email: string) => axiosInstance.get<Order[]>(`/orders/user/${email}`),
   getOrderStatus: (id: string) => axiosInstance.get<{ status: string }>(`/orders/${id}/status`),
 

@@ -4,6 +4,22 @@ const Order = require('../models/Order');
 const Product = require('../models/Product');
 const { adminAuth } = require('../middleware/auth');
 
+// Получить заказ по ID (публичный доступ)
+router.get('/:id', async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id)
+      .populate('items.product');
+    
+    if (!order) {
+      return res.status(404).json({ message: 'Заказ не найден' });
+    }
+
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Получить все заказы (для админа)
 router.get('/admin/all', adminAuth, async (req, res) => {
   try {
@@ -65,6 +81,27 @@ router.post('/', async (req, res) => {
     });
 
     const newOrder = await order.save();
+    
+    // Отправляем email с подтверждением
+    const confirmationEmail = {
+      to: customer.email,
+      subject: `Заказ #${newOrder._id} подтвержден`,
+      text: `
+        Спасибо за ваш заказ!
+        
+        Номер заказа: ${newOrder._id}
+        Сумма: ${totalAmount} ₽
+        
+        Статус заказа можно проверить по ссылке:
+        ${process.env.FRONTEND_URL}/order-status/${newOrder._id}
+        
+        С уважением,
+        Команда МедОК
+      `
+    };
+    
+    // TODO: Добавить отправку email
+
     res.status(201).json(newOrder);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -77,19 +114,6 @@ router.get('/user/:email', async (req, res) => {
     const orders = await Order.find({ 'customer.email': req.params.email })
       .populate('items.product');
     res.json(orders);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Get order status
-router.get('/:id/status', async (req, res) => {
-  try {
-    const order = await Order.findById(req.params.id);
-    if (!order) {
-      return res.status(404).json({ message: 'Заказ не найден' });
-    }
-    res.json({ status: order.status });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
