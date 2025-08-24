@@ -10,7 +10,7 @@ env:
   AWS_REGION: eu-central-1
   ECR_REPOSITORY_FRONTEND: honey-frontend
   ECR_REPOSITORY_BACKEND: honey-backend
-  ECS_CLUSTER: honey-shop-${{ github.sha }}
+  ECS_CLUSTER: honey-cluster
   ECS_SERVICE_FRONTEND: honey-frontend
   ECS_SERVICE_BACKEND: honey-backend
 
