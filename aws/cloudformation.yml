@@ -196,6 +196,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for ALB
+      GroupName: !Sub ${Environment}-honey-alb-sg
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -211,6 +212,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for DocumentDB
+      GroupName: !Sub ${Environment}-honey-docdb-sg
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -222,6 +224,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for ECS tasks
+      GroupName: !Sub ${Environment}-honey-ecs-sg
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -249,6 +252,14 @@ Outputs:
   LoadBalancerDNS:
     Description: Application Load Balancer DNS Name
     Value: !GetAtt ApplicationLoadBalancer.DNSName
+
+  LoadBalancerArn:
+    Description: Application Load Balancer ARN
+    Value: !Ref ApplicationLoadBalancer
+
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
 
   DocDBEndpoint:
     Description: DocumentDB Cluster Endpoint
