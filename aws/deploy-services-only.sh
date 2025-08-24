@@ -1,29 +1,15 @@
 #!/bin/bash
 
-# Проверка наличия AWS CLI
-if ! command -v aws &> /dev/null; then
-    echo "AWS CLI не установлен. Установите его с помощью 'pip install awscli'"
-    exit 1
-fi
-
-# Проверка авторизации в AWS
-if ! aws sts get-caller-identity &> /dev/null; then
-    echo "Не удалось подключиться к AWS. Проверьте настройки AWS CLI"
-    exit 1
-fi
+# Скрипт для деплоя только ECS сервисов
+# Используется когда инфраструктура уже создана
 
 # Параметры
 INFRA_STACK_NAME="honey-shop-infra"
 SERVICES_STACK_NAME="honey-shop-services"
 ENVIRONMENT="production"
-REGION="eu-central-1"  # Можно изменить на нужный регион
+REGION="eu-central-1"
 DOCDB_USERNAME="honey"
-DOCDB_PASSWORD="$(openssl rand -base64 32)"  # Генерируем случайный пароль
-
-# Функция для проверки существования стека
-stack_exists() {
-    aws cloudformation describe-stacks --stack-name $1 --region $REGION &> /dev/null
-}
+DOCDB_PASSWORD="${DOCDB_PASSWORD:-$(openssl rand -base64 32)}"
 
 # Функция для получения выходных данных стека
 get_stack_output() {
@@ -36,40 +22,11 @@ get_stack_output() {
         --region $REGION
 }
 
-# Шаг 1: Создание или обновление инфраструктуры
-echo "Шаг 1: Создание/обновление инфраструктуры..."
-if stack_exists $INFRA_STACK_NAME; then
-    echo "Обновление существующего стека инфраструктуры..."
-    aws cloudformation update-stack \
-        --stack-name $INFRA_STACK_NAME \
-        --template-body file://cloudformation.yml \
-        --parameters \
-            ParameterKey=Environment,ParameterValue=$ENVIRONMENT \
-            ParameterKey=DocDBUsername,ParameterValue=$DOCDB_USERNAME \
-            ParameterKey=DocDBPassword,ParameterValue=$DOCDB_PASSWORD \
-        --capabilities CAPABILITY_IAM \
-        --region $REGION
-    
-    echo "Ожидание обновления инфраструктуры..."
-    aws cloudformation wait stack-update-complete \
-        --stack-name $INFRA_STACK_NAME \
-        --region $REGION
-else
-    echo "Создание нового стека инфраструктуры..."
-    aws cloudformation create-stack \
-        --stack-name $INFRA_STACK_NAME \
-        --template-body file://cloudformation.yml \
-        --parameters \
-            ParameterKey=Environment,ParameterValue=$ENVIRONMENT \
-            ParameterKey=DocDBUsername,ParameterValue=$DOCDB_USERNAME \
-            ParameterKey=DocDBPassword,ParameterValue=$DOCDB_PASSWORD \
-        --capabilities CAPABILITY_IAM \
-        --region $REGION
-    
-    echo "Ожидание создания инфраструктуры..."
-    aws cloudformation wait stack-create-complete \
-        --stack-name $INFRA_STACK_NAME \
-        --region $REGION
+# Проверка существования инфраструктуры
+if ! aws cloudformation describe-stacks --stack-name $INFRA_STACK_NAME --region $REGION &> /dev/null; then
+    echo "Ошибка: Стек инфраструктуры $INFRA_STACK_NAME не найден"
+    echo "Сначала запустите deploy.sh для создания инфраструктуры"
+    exit 1
 fi
 
 # Получение выходных данных инфраструктуры
@@ -112,9 +69,8 @@ ALB_SECURITY_GROUP_ID=$(aws ec2 describe-security-groups \
     --output text \
     --region $REGION)
 
-# Шаг 2: Создание или обновление ECS сервисов
-echo "Шаг 2: Создание/обновление ECS сервисов..."
-if stack_exists $SERVICES_STACK_NAME; then
+# Проверка существования ECS сервисов
+if aws cloudformation describe-stacks --stack-name $SERVICES_STACK_NAME --region $REGION &> /dev/null; then
     echo "Обновление существующего стека ECS сервисов..."
     aws cloudformation update-stack \
         --stack-name $SERVICES_STACK_NAME \
@@ -168,40 +124,6 @@ else
         --region $REGION
 fi
 
-# Шаг 3: Сборка и отправка Docker образов
-echo "Шаг 3: Сборка и отправка Docker образов..."
-
-# Авторизация в ECR
-aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $FRONTEND_REPO
-
-# Frontend
-echo "Сборка и отправка frontend образа..."
-docker build -t $FRONTEND_REPO:latest -f ../Dockerfile.frontend ..
-docker push $FRONTEND_REPO:latest
-
-# Backend
-echo "Сборка и отправка backend образа..."
-docker build -t $BACKEND_REPO:latest -f ../backend/Dockerfile ../backend
-docker push $BACKEND_REPO:latest
-
-# Шаг 4: Обновление ECS сервисов с новыми образами
-echo "Шаг 4: Обновление ECS сервисов с новыми образами..."
-aws ecs update-service \
-    --cluster $CLUSTER_NAME \
-    --service $(get_stack_output $SERVICES_STACK_NAME "FrontendServiceName") \
-    --force-new-deployment \
-    --region $REGION
-
-aws ecs update-service \
-    --cluster $CLUSTER_NAME \
-    --service $(get_stack_output $SERVICES_STACK_NAME "BackendServiceName") \
-    --force-new-deployment \
-    --region $REGION
-
-echo "Деплой завершен!"
-echo "DocumentDB password: $DOCDB_PASSWORD"
-echo "Сохраните этот пароль в надежном месте!"
-
-# Получение DNS имени балансировщика нагрузки
-ALB_DNS=$(get_stack_output $INFRA_STACK_NAME "LoadBalancerDNS")
-echo "Приложение будет доступно по адресу: http://$ALB_DNS"
+echo "ECS сервисы успешно развернуты!"
+echo "Frontend Service: $(get_stack_output $SERVICES_STACK_NAME "FrontendServiceName")"
+echo "Backend Service: $(get_stack_output $SERVICES_STACK_NAME "BackendServiceName")"
