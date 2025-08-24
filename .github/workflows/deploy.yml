@@ -32,10 +32,15 @@ jobs:
           npm ci
           cd backend && npm ci
 
-      - name: Run lints
+      - name: Install ESLint
         run: |
-          npm run lint
-          cd backend && npm run lint
+          npm install --save-dev eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-react eslint-plugin-react-hooks
+
+      - name: Run frontend lints
+        run: npm run lint
+
+      - name: Run backend lints
+        run: cd backend && npm run lint
 
       - name: Run tests
         run: |
