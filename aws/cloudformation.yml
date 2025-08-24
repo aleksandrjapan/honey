@@ -13,7 +13,7 @@ Parameters:
   DocDBUsername:
     Type: String
     Description: DocumentDB admin username
-    Default: admin
+    Default: honey
 
   DocDBPassword:
     Type: String
@@ -111,7 +111,7 @@ Resources:
     Properties:
       SubnetId: !Ref PublicSubnet
       RouteTableId: !Ref PublicRouteTable
-      
+
   PublicSubnetBRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
