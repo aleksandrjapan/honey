@@ -78,6 +78,17 @@ Resources:
         - Key: Name
           Value: !Sub ${Environment}-public-subnet
 
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.4.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-public-subnet
+
   # Route Table
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -99,6 +110,12 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+      
+  PublicSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
       RouteTableId: !Ref PublicRouteTable
 
   # DocumentDB Subnet Group
@@ -170,6 +187,7 @@ Resources:
           Value: '60'
       Subnets:
         - !Ref PublicSubnet
+        - !Ref PublicSubnetB
       SecurityGroups:
         - !Ref ALBSecurityGroup
 
