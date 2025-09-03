@@ -1,8 +1,8 @@
-name: Scheduled Maintenance
+name: Maintenance Tasks
 
 on:
   schedule:
-    # Run every day at 2 AM UTC
+    # Run daily at 2 AM UTC
     - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
@@ -13,242 +13,216 @@ on:
         type: choice
         options:
         - all
-        - security-updates
         - backup
         - cleanup
+        - security-update
         - health-check
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
 jobs:
-  security-updates:
+  maintenance:
     runs-on: ubuntu-latest
-    if: github.event.inputs.task == 'all' || github.event.inputs.task == 'security-updates' || github.event_name == 'schedule'
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
+    - name: Set environment variables
+      run: |
+        echo "DROPLET_IP=${{ secrets.STAGING_DROPLET_IP }}" >> $GITHUB_ENV
+        echo "DROPLET_USER=${{ secrets.STAGING_DROPLET_USER }}" >> $GITHUB_ENV
+        echo "SSH_KEY=${{ secrets.STAGING_SSH_PRIVATE_KEY }}" >> $GITHUB_ENV
+        echo "DOMAIN=$DROPLET_IP" >> $GITHUB_ENV
+        echo "ENVIRONMENT=staging" >> $GITHUB_ENV
 
-      - name: Check for security updates
-        run: |
+    - name: Create SSH key file
+      run: |
+        mkdir -p ~/.ssh
+        echo "$SSH_KEY" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H $DROPLET_IP >> ~/.ssh/known_hosts
+
+    - name: Database Backup
+      if: github.event.inputs.task == 'backup' || github.event.inputs.task == 'all' || github.event_name == 'schedule'
+      run: |
+        ssh -i ~/.ssh/id_rsa $DROPLET_USER@$DROPLET_IP << 'EOF'
+          cd /opt/honey-shop
+          
+          # Create backup directory if it doesn't exist
+          mkdir -p /opt/backups
+          
+          # Create timestamped backup
+          BACKUP_FILE="/opt/backups/backup-$(date +%Y%m%d-%H%M%S).gz"
+          
+          if docker-compose ps | grep -q mongodb; then
+            echo "Creating database backup..."
+            docker-compose exec -T mongodb mongodump --archive --gzip > "$BACKUP_FILE"
+            echo "Backup created: $BACKUP_FILE"
+            
+            # Keep only last 3 days of backups for staging
+            find /opt/backups -name "backup-*.gz" -mtime +3 -delete
+            echo "Old backups cleaned up"
+          else
+            echo "MongoDB container not running, skipping backup"
+          fi
+        EOF
+
+    - name: System Cleanup
+      if: github.event.inputs.task == 'cleanup' || github.event.inputs.task == 'all' || github.event_name == 'schedule'
+      run: |
+        ssh -i ~/.ssh/id_rsa $DROPLET_USER@$DROPLET_IP << 'EOF'
+          cd /opt/honey-shop
+          
+          echo "Starting system cleanup..."
+          
+          # Remove unused Docker images
+          docker image prune -f
+          
+          # Remove unused containers
+          docker container prune -f
+          
+          # Remove unused volumes
+          docker volume prune -f
+          
+          # Remove unused networks
+          docker network prune -f
+          
+          # Clean up old logs
+          find /var/log -name "*.log" -mtime +30 -delete 2>/dev/null || true
+          
+          # Clean up temporary files
+          find /tmp -type f -mtime +7 -delete 2>/dev/null || true
+          
+          echo "System cleanup completed"
+          
+          # Show disk usage after cleanup
+          echo "Disk usage after cleanup:"
+          df -h
+        EOF
+
+    - name: Security Updates
+      if: github.event.inputs.task == 'security-update' || github.event.inputs.task == 'all' || github.event_name == 'schedule'
+      run: |
+        ssh -i ~/.ssh/id_rsa $DROPLET_USER@$DROPLET_IP << 'EOF'
           echo "Checking for security updates..."
-          npm audit --audit-level moderate || echo "Security vulnerabilities found"
-          cd backend && npm audit --audit-level moderate || echo "Backend security vulnerabilities found"
-
-      - name: Update dependencies
-        run: |
-          echo "Updating dependencies..."
-          npm update
-          cd backend && npm update
-
-      - name: Create security report
-        run: |
-          echo "Creating security report..."
-          npm audit --json > security-report.json || echo "No security issues found"
-          cd backend && npm audit --json > ../backend-security-report.json || echo "No backend security issues found"
-
-      - name: Upload security reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-reports-${{ github.run_id }}
-          path: |
-            security-report.json
-            backend-security-report.json
-
-  backup:
-    runs-on: ubuntu-latest
-    if: github.event.inputs.task == 'all' || github.event.inputs.task == 'backup' || github.event_name == 'schedule'
-    steps:
-      - name: Backup staging database
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.STAGING_DROPLET_IP }}
-          username: ${{ secrets.STAGING_DROPLET_USER }}
-          key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
-          script: |
-            cd /opt/honey-shop
-            mkdir -p backups
-            docker exec honey_mongodb mongodump --out /data/backup/$(date +%Y%m%d_%H%M%S) || echo "Backup failed"
-            echo "Staging backup completed"
-
-      - name: Backup production database
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.PRODUCTION_DROPLET_IP }}
-          username: ${{ secrets.PRODUCTION_DROPLET_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
-          script: |
-            cd /opt/honey-shop
-            mkdir -p backups
-            docker exec honey_mongodb mongodump --out /data/backup/$(date +%Y%m%d_%H%M%S) || echo "Backup failed"
-            echo "Production backup completed"
-
-      - name: Cleanup old backups
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.STAGING_DROPLET_IP }}
-          username: ${{ secrets.STAGING_DROPLET_USER }}
-          key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
-          script: |
-            cd /opt/honey-shop
-            # Keep only last 7 days of backups
-            find /data/backup -type d -mtime +7 -exec rm -rf {} \; || echo "No old backups to clean"
-
-      - name: Cleanup old production backups
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.PRODUCTION_DROPLET_IP }}
-          username: ${{ secrets.PRODUCTION_DROPLET_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
-          script: |
-            cd /opt/honey-shop
-            # Keep only last 30 days of backups
-            find /data/backup -type d -mtime +30 -exec rm -rf {} \; || echo "No old backups to clean"
-
-  cleanup:
-    runs-on: ubuntu-latest
-    if: github.event.inputs.task == 'all' || github.event.inputs.task == 'cleanup' || github.event_name == 'schedule'
-    steps:
-      - name: Cleanup staging environment
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.STAGING_DROPLET_IP }}
-          username: ${{ secrets.STAGING_DROPLET_USER }}
-          key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
-          script: |
-            cd /opt/honey-shop
-            echo "Cleaning up staging environment..."
+          
+          # Update package lists
+          apt-get update
+          
+          # Check for security updates
+          SECURITY_UPDATES=$(apt list --upgradable 2>/dev/null | grep -c "security" || echo "0")
+          
+          if [ "$SECURITY_UPDATES" -gt 0 ]; then
+            echo "Found $SECURITY_UPDATES security updates"
+            echo "Security updates available:"
+            apt list --upgradable 2>/dev/null | grep "security"
             
-            # Remove unused Docker images
-            docker image prune -f
-            
-            # Remove unused Docker volumes
-            docker volume prune -f
-            
-            # Remove unused Docker networks
-            docker network prune -f
-            
-            # Clean up Docker system
-            docker system prune -f
-            
-            # Clean up old log files
-            find /var/log -name "*.log" -mtime +7 -delete || echo "No old logs to clean"
-            
-            echo "Staging cleanup completed"
+            # For production, we might want to be more careful
+            if [ "${{ matrix.environment }}" = "production" ]; then
+              echo "Production environment - manual review recommended"
+            else
+              echo "Installing security updates for staging..."
+              apt-get upgrade -y --only-upgrade
+            fi
+          else
+            echo "No security updates available"
+          fi
+        EOF
 
-      - name: Cleanup production environment
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.PRODUCTION_DROPLET_IP }}
-          username: ${{ secrets.PRODUCTION_DROPLET_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
-          script: |
-            cd /opt/honey-shop
-            echo "Cleaning up production environment..."
-            
-            # Remove unused Docker images (more conservative for production)
-            docker image prune -f
-            
-            # Clean up Docker system (more conservative for production)
-            docker system prune -f
-            
-            # Clean up old log files
-            find /var/log -name "*.log" -mtime +30 -delete || echo "No old logs to clean"
-            
-            echo "Production cleanup completed"
+    - name: Health Check
+      if: github.event.inputs.task == 'health-check' || github.event.inputs.task == 'all' || github.event_name == 'schedule'
+      run: |
+        ssh -i ~/.ssh/id_rsa $DROPLET_USER@$DROPLET_IP << 'EOF'
+          cd /opt/honey-shop
+          
+          echo "Performing health check for ${{ matrix.environment }}..."
+          
+          # Check if services are running
+          echo "=== Service Status ==="
+          docker-compose ps
+          
+          # Check service health
+          echo "=== Health Checks ==="
+          
+          # Frontend health check
+          if curl -f -s http://localhost/health > /dev/null; then
+            echo "✅ Frontend is healthy"
+          else
+            echo "❌ Frontend health check failed"
+          fi
+          
+          # Backend health check
+          if curl -f -s http://localhost:5001/health > /dev/null; then
+            echo "✅ Backend is healthy"
+          else
+            echo "❌ Backend health check failed"
+          fi
+          
+          # Database health check
+          if docker-compose exec -T mongodb mongosh --eval "db.adminCommand('ping')" > /dev/null 2>&1; then
+            echo "✅ Database is healthy"
+          else
+            echo "❌ Database health check failed"
+          fi
+          
+          # System resources
+          echo "=== System Resources ==="
+          echo "Memory usage:"
+          free -h
+          
+          echo "Disk usage:"
+          df -h
+          
+          echo "Docker system usage:"
+          docker system df
+        EOF
 
-  health-check:
-    runs-on: ubuntu-latest
-    if: github.event.inputs.task == 'all' || github.event.inputs.task == 'health-check' || github.event_name == 'schedule'
-    steps:
-      - name: Check staging health
-        run: |
-          echo "Checking staging environment health..."
-          curl -f http://${{ secrets.STAGING_DROPLET_IP }}/health || echo "Staging health check failed"
+    - name: Log Rotation
+      if: github.event.inputs.task == 'all' || github.event_name == 'schedule'
+      run: |
+        ssh -i ~/.ssh/id_rsa $DROPLET_USER@$DROPLET_IP << 'EOF'
+          cd /opt/honey-shop
+          
+          echo "Rotating application logs..."
+          
+          # Rotate Docker container logs
+          docker-compose logs --tail=1000 > /opt/logs/app-$(date +%Y%m%d).log 2>/dev/null || true
+          
+          # Keep only last 30 days of logs
+          find /opt/logs -name "app-*.log" -mtime +30 -delete 2>/dev/null || true
+          
+          echo "Log rotation completed"
+        EOF
 
-      - name: Check production health
-        run: |
-          echo "Checking production environment health..."
-          curl -f https://${{ secrets.PRODUCTION_DOMAIN }}/health || echo "Production health check failed"
+    - name: Update Dependencies
+      if: github.event.inputs.task == 'all' || github.event_name == 'schedule'
+      run: |
+        ssh -i ~/.ssh/id_rsa $DROPLET_USER@$DROPLET_IP << 'EOF'
+          cd /opt/honey-shop
+          
+          echo "Checking for Docker image updates..."
+          
+          # Pull latest base images
+          docker pull mongo:6.0
+          docker pull traefik:v2.10
+          
+          echo "Base images updated"
+        EOF
 
-      - name: Check staging services
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.STAGING_DROPLET_IP }}
-          username: ${{ secrets.STAGING_DROPLET_USER }}
-          key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
-          script: |
-            cd /opt/honey-shop
-            echo "=== Staging Service Status ==="
-            docker-compose ps
-            
-            echo -e "\n=== Staging Resource Usage ==="
-            df -h
-            free -h
-            
-            echo -e "\n=== Staging Recent Logs ==="
-            docker-compose logs --tail=20
-
-      - name: Check production services
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.PRODUCTION_DROPLET_IP }}
-          username: ${{ secrets.PRODUCTION_DROPLET_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
-          script: |
-            cd /opt/honey-shop
-            echo "=== Production Service Status ==="
-            docker-compose ps
-            
-            echo -e "\n=== Production Resource Usage ==="
-            df -h
-            free -h
-            
-            echo -e "\n=== Production Recent Logs ==="
-            docker-compose logs --tail=20
-
-  system-updates:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
-    steps:
-      - name: Update staging system
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.STAGING_DROPLET_IP }}
-          username: ${{ secrets.STAGING_DROPLET_USER }}
-          key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
-          script: |
-            echo "Updating staging system..."
-            apt update && apt upgrade -y
-            echo "Staging system update completed"
-
-      - name: Update production system
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.PRODUCTION_DROPLET_IP }}
-          username: ${{ secrets.PRODUCTION_DROPLET_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
-          script: |
-            echo "Updating production system..."
-            apt update && apt upgrade -y
-            echo "Production system update completed"
-
-  notify:
-    runs-on: ubuntu-latest
-    needs: [security-updates, backup, cleanup, health-check, system-updates]
-    if: always()
-    steps:
-      - name: Notify on Success
-        if: success()
-        run: |
-          echo "✅ Scheduled maintenance completed successfully!"
-          echo "All tasks completed without errors."
-
-      - name: Notify on Failure
-        if: failure()
-        run: |
-          echo "❌ Scheduled maintenance failed!"
-          echo "Some tasks encountered errors. Check the logs for details."
+    - name: Generate Maintenance Report
+      if: always()
+      run: |
+        echo "## Maintenance Report - Staging" >> $GITHUB_STEP_SUMMARY
+        echo "**Environment:** Staging" >> $GITHUB_STEP_SUMMARY
+        echo "**Date:** $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ All maintenance tasks completed successfully" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Some maintenance tasks failed" >> $GITHUB_STEP_SUMMARY
+        fi
