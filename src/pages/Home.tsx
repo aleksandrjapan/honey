@@ -1,4 +1,4 @@
-import { Box, Button, Container, Heading, Text, Stack, SimpleGrid } from '@chakra-ui/react';
+import { Box, Button, Container, Heading, SimpleGrid, Stack, Text } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
 
 const Home = () => {
@@ -39,7 +39,7 @@ const Home = () => {
               color="brown.800"
               lineHeight="shorter"
             >
-              Натуральный мёд с собственной пасеки
+              Натуральный мёд с собственной пасеки Саши
             </Heading>
             <Text 
               fontSize={{ base: "lg", lg: "2xl" }} 
