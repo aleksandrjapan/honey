@@ -2,9 +2,7 @@ version: '3.8'
 
 services:
   frontend:
-    build:
-      context: ..
-      dockerfile: Dockerfile.frontend
+    image: honey-shop-frontend:latest
     ports:
       - "80:80"
     depends_on:
@@ -20,9 +18,7 @@ services:
       - "traefik.http.routers.frontend.entrypoints=web"
 
   backend:
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
+    image: honey-shop-backend:latest
     environment:
       - MONGODB_URI=mongodb://honey:${MONGO_PASSWORD}@mongodb:27017/honey_shop?authSource=admin
       - PORT=5001
