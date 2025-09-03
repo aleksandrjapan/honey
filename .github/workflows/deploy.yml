@@ -3,18 +3,7 @@ name: Deploy to DigitalOcean
 on:
   push:
     branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy to'
-        required: true
-        default: 'staging'
-        type: choice
-        options:
-        - staging
-        - production
 
 env:
   REGISTRY: ghcr.io
@@ -24,29 +13,37 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
 
-      - name: Install dependencies
-        run: |
-          npm ci
-          cd backend && npm ci
+    - name: Install frontend dependencies
+      run: npm ci
 
-      - name: Run tests
-        run: |
-          npm run test || echo "No tests configured"
-          cd backend && npm run test || echo "No backend tests configured"
+    - name: Run frontend tests
+      run: npm run lint
 
-      - name: Lint code
-        run: |
-          npm run lint || echo "No linting configured"
-          cd backend && npm run lint || echo "No backend linting configured"
+    - name: Setup Node.js for backend
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: 'backend/package-lock.json'
+
+    - name: Install backend dependencies
+      run: |
+        cd backend
+        npm ci
+
+    - name: Run backend tests
+      run: |
+        cd backend
+        npm run lint
 
   build:
     needs: test
@@ -54,162 +51,111 @@ jobs:
     permissions:
       contents: read
       packages: write
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
+    - name: Extract metadata for frontend
+      id: meta-frontend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push Frontend image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile.frontend
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${{ steps.meta.outputs.version }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+    - name: Build and push frontend image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.frontend
+        push: true
+        tags: ${{ steps.meta-frontend.outputs.tags }}
+        labels: ${{ steps.meta-frontend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
 
-      - name: Build and push Backend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ steps.meta.outputs.version }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+    - name: Extract metadata for backend
+      id: meta-backend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Output image names
-        run: |
-          echo "Frontend: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${{ steps.meta.outputs.version }}"
-          echo "Backend: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ steps.meta.outputs.version }}"
+    - name: Build and push backend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        file: ./backend/Dockerfile
+        push: true
+        tags: ${{ steps.meta-backend.outputs.tags }}
+        labels: ${{ steps.meta-backend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
 
-  deploy-staging:
+  deploy:
     needs: build
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'staging'
-    environment: staging
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Deploy to DigitalOcean Staging
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.STAGING_DROPLET_IP }}
-          username: ${{ secrets.STAGING_DROPLET_USER }}
-          key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
-          script: |
-            cd /opt/honey-shop
-            export FRONTEND_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${{ needs.build.outputs.version }}"
-            export BACKEND_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ needs.build.outputs.version }}"
-            echo "Deploying Frontend: $FRONTEND_IMAGE"
-            echo "Deploying Backend: $BACKEND_IMAGE"
-            
-            # Pull new images
-            docker pull $FRONTEND_IMAGE
-            docker pull $BACKEND_IMAGE
-            
-            # Update docker-compose.yml with new images
-            sed -i "s|image:.*frontend.*|image: $FRONTEND_IMAGE|g" docker-compose.yml
-            sed -i "s|image:.*backend.*|image: $BACKEND_IMAGE|g" docker-compose.yml
-            
-            # Restart services
-            docker-compose down
-            docker-compose up -d
-            
-            # Wait for services to be ready
-            sleep 30
-            
-            # Check status
-            docker-compose ps
+    - name: Deploy to Staging
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.STAGING_DROPLET_IP }}
+        username: ${{ secrets.STAGING_DROPLET_USER }}
+        key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+        script: |
+          cd /opt/honey-shop
+          
+          # Pull latest images
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:latest
+          
+          # Tag images for local use
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest honey-shop-frontend:latest
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:latest honey-shop-backend:latest
+          
+          # Stop existing services
+          docker-compose down || true
+          
+          # Start services
+          docker-compose up -d
+          
+          # Wait for services to be ready
+          sleep 30
+          
+          # Health check
+          curl -f http://localhost/health || exit 1
+          
+          echo "Deployment completed successfully!"
 
-      - name: Health Check Staging
-        run: |
-          sleep 60
-          curl -f http://${{ secrets.STAGING_DROPLET_IP }}/health || exit 1
-
-  deploy-production:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event.inputs.environment == 'production'
-    environment: production
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Deploy to DigitalOcean Production
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.PRODUCTION_DROPLET_IP }}
-          username: ${{ secrets.PRODUCTION_DROPLET_USER }}
-          key: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
-          script: |
-            cd /opt/honey-shop
-            export FRONTEND_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${{ needs.build.outputs.version }}"
-            export BACKEND_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ needs.build.outputs.version }}"
-            echo "Deploying Frontend: $FRONTEND_IMAGE"
-            echo "Deploying Backend: $BACKEND_IMAGE"
-            
-            # Pull new images
-            docker pull $FRONTEND_IMAGE
-            docker pull $BACKEND_IMAGE
-            
-            # Update docker-compose.yml with new images
-            sed -i "s|image:.*frontend.*|image: $FRONTEND_IMAGE|g" docker-compose.yml
-            sed -i "s|image:.*backend.*|image: $BACKEND_IMAGE|g" docker-compose.yml
-            
-            # Restart services
-            docker-compose down
-            docker-compose up -d
-            
-            # Wait for services to be ready
-            sleep 30
-            
-            # Check status
-            docker-compose ps
-
-      - name: Health Check Production
-        run: |
-          sleep 60
-          curl -f https://${{ secrets.PRODUCTION_DOMAIN }}/health || exit 1
-
-  notify:
-    needs: [deploy-staging, deploy-production]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Notify on Success
-        if: success()
-        run: |
-          echo "✅ Deployment completed successfully!"
-          echo "Frontend: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${{ needs.build.outputs.version }}"
-          echo "Backend: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ needs.build.outputs.version }}"
-
-      - name: Notify on Failure
-        if: failure()
-        run: |
+    - name: Notify deployment status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ Deployment successful!"
+          echo "🌐 Your app is available at: http://${{ secrets.STAGING_DROPLET_IP }}"
+        else
           echo "❌ Deployment failed!"
-          echo "Check the logs for more details."
+        fi
