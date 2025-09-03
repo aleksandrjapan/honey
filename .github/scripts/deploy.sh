@@ -99,7 +99,15 @@ deploy_services() {
     ssh -o StrictHostKeyChecking=no "$DROPLET_USER@$DROPLET_IP" << EOF
         cd /opt/$PROJECT_NAME
         
-        # Stop existing services gracefully
+        # Force stop and remove all containers to free up ports
+        log_info "Stopping all running containers..."
+        docker stop \$(docker ps -q) 2>/dev/null || true
+        docker rm \$(docker ps -aq) 2>/dev/null || true
+        
+        # Clean up any orphaned networks
+        docker network prune -f || true
+        
+        # Stop existing services gracefully (additional cleanup)
         log_info "Stopping existing services..."
         docker-compose down --timeout 30 || true
         

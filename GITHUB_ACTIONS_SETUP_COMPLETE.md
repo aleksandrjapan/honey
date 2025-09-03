@@ -49,7 +49,7 @@ You need to add these secrets in your GitHub repository:
 ```
 STAGING_DROPLET_IP          # Your staging droplet IP address
 STAGING_DROPLET_USER        # SSH username (usually 'root')
-STAGING_SSH_PRIVATE_KEY     # Your SSH private key for staging
+r     # Your SSH private key for staging
 ```
 
 #### Production Environment
