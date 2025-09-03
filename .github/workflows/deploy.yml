@@ -128,7 +128,16 @@ jobs:
         script: |
           cd /opt/honey-shop
           
+          # Force stop and remove all containers to free up ports
+          echo "Stopping all running containers..."
+          docker stop $(docker ps -q) 2>/dev/null || true
+          docker rm $(docker ps -aq) 2>/dev/null || true
+          
+          # Clean up any orphaned networks
+          docker network prune -f || true
+          
           # Pull latest images
+          echo "Pulling latest images..."
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:latest
           
@@ -136,10 +145,11 @@ jobs:
           docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest honey-shop-frontend:latest
           docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:latest honey-shop-backend:latest
           
-          # Stop existing services
+          # Stop existing services (additional cleanup)
           docker-compose down || true
           
           # Start services
+          echo "Starting services..."
           docker-compose up -d
           
           # Wait for services to be ready

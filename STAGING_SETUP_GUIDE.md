@@ -50,7 +50,7 @@ Your droplet should have this structure:
 ├── docker-compose.prod.yml
 ├── .env
 └── backups/
-```
+`thishior
 
 #### **Create the directory structure:**
 ```bash
